@@ -162,7 +162,7 @@ class Preso(object):
         self._init_xml()
         self.master_page_name_cover = None
         self.master_page_name_normal = None
-        
+
         self.extract_master_page_styles(self.styles_xml())
 
     def _init_xml(self):
@@ -209,18 +209,18 @@ class Preso(object):
 
     def get_xpath(self, namespace, element):
         return "{%s}%s" % (DOC_CONTENT_ATTRIB['xmlns:' + namespace], element)
-        
+
     def set_template(self, template_file):
         # Open the template presentation and extract all the layouts
         # included. We need these to dimension our frames to match.
         template_styles_file = zipwrap.ZipWrap(template_file)
         template_styles_xml = template_styles_file.cat('styles.xml', False)
         self.extract_master_page_styles(template_styles_xml)
-        
+
         # Guess that the first master pages used in the template
         # presentation should be used for the cover page and all other pages,
         # respectively. If only one master page is used, it's used for both.
-        
+
         template_content_xml = template_styles_file.cat('content.xml', False)
         master_pages_used = self.get_master_page_names(template_content_xml)
         names = list(master_pages_used)[:2]
@@ -228,30 +228,30 @@ class Preso(object):
             title_name, normal_name = names
         else:
             title_name, normal_name = names[0], names[0]
-        
+
         self.master_page_name_cover = title_name
         self.master_page_name_normal = normal_name
 
     def extract_master_page_styles(self, styles_xml_string):
         self.template_style_data = et.fromstring(styles_xml_string.encode("utf-8"))
-        
+
         # The layouts turned out not to be very useful:
         """
         for layout_el in self.template_style_data.findall('.//' +
             self.get_xpath('style', 'presentation-page-layout')):
-            
+
             name = layout_el.get(self.get_xpath('style', 'name'))
             self.template_layouts[name] = layout_el
         """
-        
+
         # But the master pages contain the actual frame dimensions
         # that we need. Go figure.
         for master_el in self.template_style_data.findall('.//' +
             self.get_xpath('style', 'master-page')):
-            
+
             name = master_el.get(self.get_xpath('style', 'name'))
             self.template_layouts[name] = master_el
-        
+
     def add_otp_style(self, zip_odp, style_file):
         """
         takes the slide content and merges in the style_file
@@ -267,21 +267,21 @@ class Preso(object):
         return zip_odp
 
     def get_master_page_names(self, xml_data):
-        root = et.fromstring(xml_data)
+        root = et.fromstring(xml_data.encode('utf-8'))
         pages = root.findall('.//{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}page')
         for page in pages:
             yield page.get('{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}master-page-name')
 
     def get_placeholders(self, master_name):
         placeholders = {}
-        
+
         master_el = self.template_layouts.get(master_name, None)
         if master_el is not None:
             # for placeholder in layout_el.iter(self.get_xpath('presentation', 'placeholder')):
             for placeholder in master_el.iter(self.get_xpath('draw', 'frame')):
                 if (placeholder.get(self.get_xpath('presentation', 'placeholder'))
                     == 'true'):
-                    
+
                     slot_name = placeholder.get(self.get_xpath('presentation', 'class'))
                     placeholders[slot_name] = {
                         'x': placeholder.get(self.get_xpath('svg', 'x')),
@@ -289,9 +289,12 @@ class Preso(object):
                         'width': placeholder.get(self.get_xpath('svg', 'width')),
                         'height': placeholder.get(self.get_xpath('svg', 'height')),
                     }
-            
+
             if not 'outline' in placeholders:
                 raise ValueError("There is no 'outline' placeholder in "
+                    "slide master '%s', cannot use it" % master_name)
+            if not 'title' in placeholders:
+                raise ValueError("There is no 'title' placeholder in "
                     "slide master '%s', cannot use it" % master_name)
         else:
             # use some defaults; TODO provide a way to set these from
@@ -302,9 +305,9 @@ class Preso(object):
                 'outline': dict(x="2.057cm", y="5.838cm", width="23.911cm",
                     height="13.23cm"),
             }
-            
+
         return placeholders
-        
+
     def to_file(self, filename=None):
         """
         >>> p = Preso()
@@ -712,7 +715,7 @@ class Slide(object):
         User needs to remember to pop out of it.
         """
         self.cur_element.pending_nodes.pop()
-        
+
     def push_style(self, style):
         if self.cur_element is None:
             self.add_text_frame()
@@ -802,10 +805,10 @@ class Slide(object):
     def set_layout(self, layout_name):
         self._page.set('presentation:presentation-page-layout-name',
             layout_name)
-    
+
     def get_placeholders(self):
         return self.placeholders
-        
+
     def get_node(self):
         """return etree Element representing this slide"""
         # already added title, text frames
@@ -1139,7 +1142,7 @@ class MixedContent(object):
             cur_text = self.cur_node.text or ''
             self.cur_node.text = cur_text + letter
         self.dirty = True
-        
+
     def parse_dimension(self, dimension):
         import re
         result = re.match(r'(\d+(\.\d+))(\w+)', dimension)
@@ -1160,7 +1163,7 @@ class MixedContent(object):
     def scale_dimension(self, dimension, scale_factor):
         original, units = self.parse_dimension(dimension)
         return '%s%s' % (origin * scale_factor, units)
-    
+
 class Footer(MixedContent):
     def __init__(self, slide):
         self._default_align = 'center'
@@ -1206,7 +1209,7 @@ class TextFrame(MixedContent):
 
         new_attrib = dict(**defaults)
         new_attrib.update(attrib)
-        
+
         MixedContent.__init__(self, slide,  'draw:frame', attrib=new_attrib)
         self._text_box = sub_el(self.node, 'draw:text-box')
         self.cur_node = self._text_box
