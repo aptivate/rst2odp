@@ -180,7 +180,11 @@ class Preso(object):
         odp = zipwrap.ZipWrap(preso_file)
         content = odp.cat('content.xml', False)
         content_tree = et.fromstring(content)
-        slides = content_tree.findall('{urn:oasis:names:tc:opendocument:xmlns:office:1.0}body/{urn:oasis:names:tc:opendocument:xmlns:office:1.0}presentation/{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}page')
+        slides = content_tree.findall('/'.join([
+            self.get_xpath('office', 'body'),
+            self.get_xpath('office', 'presentation'),
+            self.get_xpath('drawing', 'page'),
+            ]))
         try:
             slide_xml = slides[page_num - 1]
         except IndexError, e:
@@ -825,7 +829,7 @@ class Slide(object):
             self._page.attrib['presentation:use-footer-name'] = self.footer.name
         return self._page
 
-    def add_text_frame(self, attrib=None):
+    def add_text_frame(self, attrib={}):
         # should adjust width, x based on if existing boxes
         self.text_frames.append(TextFrame(self, attrib))
         node = self.text_frames[-1].get_node()
@@ -1135,7 +1139,28 @@ class MixedContent(object):
             cur_text = self.cur_node.text or ''
             self.cur_node.text = cur_text + letter
         self.dirty = True
+        
+    def parse_dimension(self, dimension):
+        import re
+        result = re.match(r'(\d+(\.\d+))(\w+)', dimension)
+        if not result:
+            raise ValueError('%s cannot be parsed as a dimension' % dimension)
+        number = result.group(1)
+        units = result.group(3)
+        return number, units
 
+    def add_dimensions(self, dimension_a, dimension_b):
+        a, a_units = self.parse_dimension(dimension_a)
+        b, b_units = self.parse_dimension(dimension_b)
+        if a_units != b_units:
+            raise ValueError('Only know how to add dimensions in the same '
+                'units, not %s and %s' % (dimension_a, dimension_b))
+        return '%s%s' % (a + b, a_units)
+
+    def scale_dimension(self, dimension, scale_factor):
+        original, units = self.parse_dimension(dimension)
+        return '%s%s' % (origin * scale_factor, units)
+    
 class Footer(MixedContent):
     def __init__(self, slide):
         self._default_align = 'center'
@@ -1167,9 +1192,9 @@ class PictureFrame(MixedContent):
 
 
 class TextFrame(MixedContent):
-    def __init__(self, slide, attrib=None):
+    def __init__(self, slide, attrib={}):
         placeholders = slide.get_placeholders()
-        attrib = attrib or {
+        defaults = {
             'presentation:style-name':'Default-outline1',
             'draw:layer':'layout',
             'svg:width': placeholders['outline']['width'],
@@ -1177,9 +1202,12 @@ class TextFrame(MixedContent):
             'svg:x': placeholders['outline']['x'],
             'svg:y': placeholders['outline']['y'],
             'presentation:class':'outline'
-            }
+        }
 
-        MixedContent.__init__(self, slide,  'draw:frame', attrib=attrib)
+        new_attrib = dict(**defaults)
+        new_attrib.update(attrib)
+        
+        MixedContent.__init__(self, slide,  'draw:frame', attrib=new_attrib)
         self._text_box = sub_el(self.node, 'draw:text-box')
         self.cur_node = self._text_box
         self.text_styles = ['P1']
@@ -1311,7 +1339,7 @@ class TextStyle(object):
 
     FAMILY = 'text'
     STYLE_PROP = 'style:text-properties'
-    PREFIX = 'T%d'
+    PREFIX = 'P%d'
     ATTRIB2NAME = {}
     TEXT_COUNT = 0
     def __init__(self, **kw):

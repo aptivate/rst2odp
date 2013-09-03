@@ -256,14 +256,28 @@ class ODPTranslator(nodes.GenericNodeVisitor):
     def default_visit(self, node):
         if self.settings.report_level >= 3:
             print "ERR! NODE", node, node.tagname
-        raise NotImplementedError('node is %r, tag is %s' % (node, node.tagname))
+        raise NotImplementedError('%s: %s (%r)' %
+            (node.tagname, node.rawsource, node))
 
+    def visit_system_message(self, node):
+        if self.settings.report_level >= 3:
+            print "ERR! NODE", node, node.tagname
+        raise NotImplementedError('system_message: %s' % node.astext())
 
     def default_departure(self, node):
         if self.settings.report_level >= 3:
             print "NODE", node, node.tagname
         raise NotImplementedError
 
+    def visit_problematic(self, node):
+        if self.settings.report_level >= 3:
+            print "Problematic NODE", node, node.tagname
+        raise NotImplementedError
+        
+    def depart_problematic(self, node):
+        if self.settings.report_level >= 3:
+            print "Problematic NODE", node, node.tagname
+        raise NotImplementedError
 
     def _dumb_visit(self, node):
         pass
@@ -417,7 +431,7 @@ class ODPTranslator(nodes.GenericNodeVisitor):
         self.bullet_depth += 1
         if not self.bullet_list:
             # start a new list
-            self.cur_slide.insert_line_breaks()
+            # self.cur_slide.insert_line_breaks()
             self.bullet_list = preso.OutlineList(self.cur_slide)
             self.cur_slide.add_list(self.bullet_list)
         else:
@@ -440,7 +454,9 @@ class ODPTranslator(nodes.GenericNodeVisitor):
             # done with list
             self.bullet_list = None
             self.cur_slide.pop_element()
-            self.cur_slide.insert_line_break += 1
+            
+            if 'handout' in classes:
+				self.cur_slide.insert_line_break += 1
         else:
             self.bullet_list.dedent()
         if 'incremental' in node.attributes.get('classes', []):
@@ -587,11 +603,8 @@ class ODPTranslator(nodes.GenericNodeVisitor):
         elif self.at('topic'):
             return
         elif self.at('field_body'):
-            self.visit_attribution(node)
             self.cur_slide.push_pending_node('text:a', {'xlink:href': '%s' % node['refuri'],
                                                         'xlink:type': 'simple'})
-            self.cur_slide.write(node.astext())
-            self.cur_slide.pop_pending_node()
         else:
             # needs to be in a p
             # need to hack a bit, since .write usually inserts text:p and text:span
@@ -613,7 +626,6 @@ class ODPTranslator(nodes.GenericNodeVisitor):
         elif self.at('topic'):
             return
         elif self.at('field_body'):
-            self.depart_attribution(node)
             self.cur_slide.parent_of('text:a')
         else:
             self.cur_slide.parent_of('text:a')
@@ -639,7 +651,6 @@ class ODPTranslator(nodes.GenericNodeVisitor):
     depart_substitution_definition = _dumb_depart
 
     def visit_section(self, node):
-
         # first page has no section
         if self.at('section') < 2:
             # don't create slide for subsections
@@ -736,13 +747,18 @@ class ODPTranslator(nodes.GenericNodeVisitor):
     def visit_block_quote(self, node):
         attribs = {'fo:text-align':'start',
                    'fo:margin-left':'1.2cm',
-                   'fo:margin-right':'-.9cm',
                    }
         style = preso.ParagraphStyle(**attribs)
+        self.cur_slide.push_style(style)
+        
+        # italics
+        style = preso.TextStyle(**{'fo:font-size':S5_SIZES['small'],
+                                   'fo:font-style':'italic'})
         self.cur_slide.push_style(style)
 
     def depart_block_quote(self, node):
         # pop off the text:p
+        self.cur_slide.pop_style()
         self.cur_slide.pop_style()
         self.cur_slide.pop_node()
 
@@ -961,7 +977,6 @@ class ODPTranslator(nodes.GenericNodeVisitor):
     def visit_hint(self, node):
         return self._visit_hint(node, 'Hint')
 
-
     def _visit_hint(self, node, name):
         if self.cur_slide.text_frames:
             # should adjust width of other frame
@@ -994,6 +1009,14 @@ class ODPTranslator(nodes.GenericNodeVisitor):
 
     depart_sidebar = depart_hint
 
+    def visit_subtitle(self, node):
+        self.cur_slide.add_text_frame(attrib={
+            'presentation:style-name':'Default-subtitle',
+            'presentation:class':'subtitle'
+        })
+
+    def depart_subtitle(self, node):
+        self.cur_slide.add_text_frame()
 
     def _get_para_attribs(self, node):
         classes = node.attributes.get('classes', [])
