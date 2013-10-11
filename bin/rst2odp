@@ -297,7 +297,7 @@ class ODPTranslator(nodes.GenericNodeVisitor):
             return
         elif self.at('sidebar'):
             return
-        elif self.at('section') < 2:
+        elif self.cur_slide.cur_element is None:
             self.cur_slide.add_title_frame()
 
     def depart_title(self, node):
@@ -305,10 +305,10 @@ class ODPTranslator(nodes.GenericNodeVisitor):
             return
         elif self.at('sidebar'):
             return
-        elif self.at('section') < 2:
+        else: # elif self.at('section') < 2:
             # not in a title element anymore
             self.cur_slide.cur_element = None
-        else:
+        # else:
             pass
 
 
@@ -652,8 +652,8 @@ class ODPTranslator(nodes.GenericNodeVisitor):
 
     def visit_section(self, node):
         # first page has no section
-        if self.at('section') < 2:
-            # don't create slide for subsections
+        if True or self.at('section') < 2:
+            # do create slide for subsections
             self._init_slide(force=True)
 
     def depart_section(self, node):
