@@ -179,7 +179,7 @@ class Preso(object):
     def import_slide(self, preso_file, page_num):
         odp = zipwrap.ZipWrap(preso_file)
         content = odp.cat('content.xml', False)
-        content_tree = et.fromstring(content)
+        content_tree = et.fromstring(content.encode("utf-8"))
         slides = content_tree.findall('/'.join([
             self.get_xpath('office', 'body'),
             self.get_xpath('office', 'presentation'),
@@ -267,7 +267,7 @@ class Preso(object):
         return zip_odp
 
     def get_master_page_names(self, xml_data):
-        root = et.fromstring(xml_data)
+        root = et.fromstring(xml_data.encode("utf-8"))
         pages = root.findall('.//{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}page')
         for page in pages:
             yield page.get('{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}master-page-name')
@@ -618,7 +618,7 @@ class XMLSlide(object):
         found = {}
         # get content.xml automatic-styles
         content = odp_zipwrap.cat('content.xml', False)
-        content_node = et.fromstring(content)
+        content_node = et.fromstring(content.encode("utf-8"))
         auto_node = content_node.findall('{urn:oasis:names:tc:opendocument:xmlns:office:1.0}automatic-styles')[0]
 
         for node in auto_node.getchildren():
